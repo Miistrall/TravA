@@ -1,25 +1,45 @@
-from dotenv import load_dotenv
-load_dotenv()
+"""
+WhatsApp Message Sender using Twilio API.
 
-from twilio.rest import Client
+Loads configuration from environment variables and sends a WhatsApp message
+using the Twilio API. Includes robust error handling and clear documentation.
+"""
+
 import os
+from dotenv import load_dotenv
+from twilio.rest import Client
+from twilio.base.exceptions import TwilioRestException
 
-# Pobierz dane z zmiennych środowiskowych
-account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-twilio_whatsapp_number = os.getenv("TWILIO_WHATSAPP_NUMBER")
-your_whatsapp_number = os.getenv("YOUR_WHATSAPP_NUMBER")
+def get_env_variable(variable_name: str) -> str:
+    """
+    Retrieve the value of an environment variable.
+    Raises an EnvironmentError if the variable is not set.
+    """
+    value = os.getenv(variable_name)
+    if not value:
+        raise EnvironmentError(f"Environment variable '{variable_name}' is not set.")
+    return value
 
-# Utwórz klienta Twilio
-client = Client(account_sid, auth_token)
+def send_whatsapp_message() -> None:
+    """
+    Send a WhatsApp message using Twilio API.
+    """
+    load_dotenv()
+    try:
+        account_sid = get_env_variable("TWILIO_ACCOUNT_SID")
+        auth_token = get_env_variable("TWILIO_AUTH_TOKEN")
+        twilio_whatsapp_number = get_env_variable("TWILIO_WHATSAPP_NUMBER")
+        recipient_whatsapp_number = get_env_variable("YOUR_WHATSAPP_NUMBER")
 
-# Wyślij wiadomość
-message = client.messages.create(
-    body="Cześć Karolina! To jest testowa wiadomość od Twojego asystenta AI 🚗 - Mistral!",
-    from_=twilio_whatsapp_number,
-    to=your_whatsapp_number
-)
+        client = Client(account_sid, auth_token)
+        message = client.messages.create(
+            body="Hello Karolina! This is a test message from your AI assistant 🚗 - Mistral!",
+            from_=twilio_whatsapp_number,
+            to=recipient_whatsapp_number
+        )
+        print(f"Message sent successfully! SID: {message.sid}")
+    except (EnvironmentError, TwilioRestException) as error:
+        print(f"Error: {error}")
 
-print(f"Wiadomość wysłana! SID: {message.sid}")
-
-# Upewnij się, że Twilio Sandbox jest aktywowany i Twój numer jest zweryfikowany
+if __name__ == "__main__":
+    send_whatsapp_message()
