@@ -4,46 +4,47 @@ Main integration script for Travel Assistant.
 Fetches current weather using Weather.py and sends it via WhatsApp using Message.py.
 """
 
+from flask import Flask, request, Response # type: ignore
 from Weather import get_current_weather, get_hourly_forecast
 from Message import get_env_variable
 from dotenv import load_dotenv # type: ignore
+from twilio.twiml.messaging_response import MessagingResponse # type: ignore
 
-def send_weather_via_whatsapp(city: str):
-    """
-    Fetch weather for the given city and send it via WhatsApp.
-    """
+app = Flask(__name__)
+
+@app.route("/whatsapp", methods=["POST"])
+def whatsapp_webhook():
     load_dotenv()
-    try:
-        weather = get_current_weather(city)
-        description = weather['weather'][0]['description']
-        temp = weather['main']['temp']
-        message = f"Weather in {city}: {description}, temperature: {temp}°C\n"
+    incoming_msg = request.values.get("Body", "").strip()
+    resp = MessagingResponse()
+    reply = resp.message()
 
-        # Get forecast for next 9 hours (3 intervals)
-        forecast_list = get_hourly_forecast(city, hours=3)
-        message += "Forecast for next hours:\n"
-        for forecast in forecast_list:
-            time = forecast['dt_txt']
-            desc = forecast['weather'][0]['description']
-            temp_f = forecast['main']['temp']
-            message += f"{time}: {desc}, {temp_f}°C\n"
+    if incoming_msg.lower().startswith("pogoda") or incoming_msg.lower().startswith("weather"):
+        # Extract city name
+        parts = incoming_msg.split(maxsplit=1)
+        if len(parts) < 2:
+            reply.body("Podaj nazwę miasta, np. 'pogoda Warszawa'")
+        else:
+            city = parts[1]
+            try:
+                weather = get_current_weather(city)
+                description = weather['weather'][0]['description']
+                temp = weather['main']['temp']
+                message = f"Pogoda w {city}: {description}, temperatura: {temp}°C\n"
+                forecast_list = get_hourly_forecast(city, hours=3)
+                message += "Prognoza na kolejne godziny:\n"
+                for forecast in forecast_list:
+                    time = forecast['dt_txt']
+                    desc = forecast['weather'][0]['description']
+                    temp_f = forecast['main']['temp']
+                    message += f"{time}: {desc}, {temp_f}°C\n"
+                reply.body(message)
+            except Exception as e:
+                reply.body(f"Błąd: {e}")
+    else:
+        reply.body("Napisz 'pogoda [miasto]', np. 'pogoda Warszawa', aby otrzymać prognozę.")
 
-        # Prepare WhatsApp message sending
-        from twilio.rest import Client # type: ignore
-        account_sid = get_env_variable("TWILIO_ACCOUNT_SID")
-        auth_token = get_env_variable("TWILIO_AUTH_TOKEN")
-        twilio_whatsapp_number = get_env_variable("TWILIO_WHATSAPP_NUMBER")
-        recipient_whatsapp_number = get_env_variable("YOUR_WHATSAPP_NUMBER")
-        client = Client(account_sid, auth_token)
-        client.messages.create(
-            body=message,
-            from_=twilio_whatsapp_number,
-            to=recipient_whatsapp_number
-        )
-        print("Weather and forecast sent via WhatsApp!")
-    except Exception as e:
-        print(f"Error: {e}")
+    return Response(str(resp), mimetype="application/xml")
 
 if __name__ == "__main__":
-    city = input("Enter city name: ")
-    send_weather_via_whatsapp(city)
+    app.run(host="0.0.0.0", port=5000)
